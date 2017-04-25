@@ -4,27 +4,229 @@ author: "Sara Kutbay"
 date: "April 25, 2017"
 output: html_document
 ---
+<style type="text/css">
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+body{ /* Normal  */
+      font-size: 12px;
+  }
+td {  /* Table  */
+  font-size: 8px;
+}
+h1.title {
+  font-size: 38px;
+  color: DarkRed;
+}
+h1 { /* Header 1 */
+  font-size: 28px;
+  color: DarkBlue;
+}
+h2 { /* Header 2 */
+    font-size: 22px;
+  color: DarkRed;
+}
+h3 { /* Header 3 */
+  font-size: 18px;
+  font-family: "Times New Roman", Times, serif;
+  color: DarkBlue;
+}
+code.r{ /* Code block */
+    font-size: 12px;
+}
+pre { /* Code block - determines code spacing between lines */
+    font-size: 14px;
+}
+</style>
+
+
+#Problem
+Hometown Bank would like to improve its status in the term deposit market.  Currently, only around 12% of bank customers have subscribed to a term deposit, and Hometown would like to increase this number in order to increase the number of open accounts and overall revenue.  The bank has provided a large customer data set to analyze for any trends or insights that could aid in their approach.
+
+
+#Question to Answer
+Can we uncover what factors are linked to a customer subscribing to a term deposit, and can we use these predictors to encourage more subscriptions in the future?
+
+
+#Analysis
+1. Logistic Regression - This model will help us to determine what specific variables are predictors of a customer subscribing to a term deposit.
+2. Decision Tree - This model can be utilized by non-technical bank resources in order to encourage term deposit subscriptions through a visual representation.
+3. Cluster Analysis - We can see whether or not customers can be grouped into clusters and if certain clusters are more likely to subscribe to a term deposit.
+
+
+#Data Preparation
+###Read in Data Set
+```{r}
+bank_full<-read.csv("C:/Users/SK030875/Desktop/MBA/BIA6307_new/HW5/data/bank-full.csv")
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+###Rearrange Columns so that Target Variable is First
+```{r}
+bank<-bank_full[,c(17,1:16)]
+names(bank)
 ```
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+###Initial View of Data Set Dimensions and Target Variable
+```{r}
+dim(bank)
+table(bank$y..category)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+###Install Packages
+```{r}
+#install.packages("rpart", lib="/Users/SK030875/Desktop/MBA/BIA6307_new/Packages/")
+#install.packages("rpart.plot", lib="/Users/SK030875/Desktop/MBA/BIA6307_new/Packages/")
+```
+
+#Logistic Regression
+##Assumptions
+###Not all of the variables provided in the data set are necessary or useful to use in the linear regression model.  For example, 'Last Contact Day of the Month' is independent among customers, and we have more cohesive variables such as 'Number of Contacts'.  Therefore, I'd like to exclude columns 2, 9, 10, 11, 14, 15, and 16 from the original data set.  This allows us to focus on variables that can be manipulated in the future and that have no overlap with one another.  Additionally, for continuous or categorical variables, I've simplified them into binomial.  For example, 'Job' has been simplified down to 'employed' or 'unemployed'.  This will keep our regression model from becoming diluted with too many categories.
+
+###Preparation for Logistic Regression
+```{r}
+bank1 <- bank[,c(1:9, 13:14)]
+bank1$age..number <- ifelse(bank1$age..number > 40, 1, 0)
+bank1$y..category <- ifelse(bank1$y..category == "yes", 1, 0)
+bank1$job..category <- ifelse((bank1$job..category == "admin." | 
+                              bank1$job..category == "management" |
+                              bank1$job..category == "housemaid" | 
+                              bank1$job..category == "entrepreneur" |
+                              bank1$job..category == "blue-collar" |
+                              bank1$job..category == "self-employed" |
+                              bank1$job..category == "technician" |
+                              bank1$job..category == "services"), 1, 0)
+bank1$marital..category <- ifelse(bank1$marital..category == "married", 1, 0)
+bank1$education..category <- ifelse((bank1$education..category == "unknown" |
+                                     bank1$education..category == "primary"), 1, 0)
+bank1$default..category <- ifelse(bank1$default..category == "yes", 1, 0)
+bank1$balance..number <- ifelse(bank1$balance..number > 0, 1, 0)
+bank1$housing..category <- ifelse(bank1$housing..category == "yes", 1, 0)
+bank1$loan..category <- ifelse(bank1$loan..category == "yes", 1, 0)
+bank1$duration..number <- ifelse(bank1$duration..number > 300, 1, 0)
+bank1$campaign..number <- ifelse(bank1$campaign..number > 3, 1, 0)
+```
+
+###Run Regression Model and Change to Odds Ratios
+```{r}
+bank_regression<-glm(bank1$y..category~., data=bank1, family=binomial())
+exp(cbind(bank_odds=coef(bank_regression)))
+```
+
+###Check for significance
+```{r}
+anova(bank_regression,test="Chisq") 
+```
+
+###From the model, we see that customers who had a contact duration of greater than 5 minutes during their last contact were almost 7 times more likely to subscribe to a term deposit.  Additionally, customers with a positive balance were almost twice as likely to subscribe.  These are key factors that Hometown Bank should focus on when pitching term deposit subscriptions to customers.
+
+#Decision Tree
+##Assumptions
+###We can use the data set in its original form when performing the decision tree, as it will handle the different types of variables.
+###Preparation for Decision Tree
+```{r}
+bank2 <- bank
+```
+
+###Use rpart to Build a Decision Tree
+```{r}
+library(rpart, lib.loc="/Users/SK030875/Desktop/MBA/BIA6307_new/Packages/")
+bank_rpart <- rpart(bank2$y..category~., method="class", parms = list(split="gini"), data=bank2)
+```
+
+###Prune and Visualize the Decision Tree
+```{r}
+library(rpart.plot, lib.loc="/Users/SK030875/Desktop/MBA/BIA6307_new/Packages/")
+
+cptable<-printcp(bank_rpart)
+set.cp.value<-cptable[which.min(cptable[,"xerror"]),"CP"]
+Pruned_bank_rpart <- prune(bank_rpart, cp=set.cp.value)
+
+rpart.plot(Pruned_bank_rpart, type=1, extra=101)
+```
+
+###From this analysis, we can see that duration still has the largest effect on term deposit subscriptions.  Customers who were contacted for longer than around 10 minutes were more likely subscribe to a term deposit.  Addtionally, because we left all of the variables in their original forms, we can see how categories are affecting term deposits.  If the previous marketing campaign was not successful for the customer, they are extremely unlikely to subscribe to a term deposit.
+
+
+#Cluster Analysis
+##Assumptions
+###We need to use the same modified data set that we used for logistic regression, as we want all variables represented as binary values. We will try k = 3, k = 4, and k = 5.
+
+###Perform cluster analysis for each k value
+```{r}
+set.seed(123)
+bank_clusters_3 <- kmeans(bank1, centers=3) 
+bank_clusters_4 <- kmeans(bank1, centers=4) 
+bank_clusters_5 <- kmeans(bank1, centers=5)
+```
+
+###Cluster Separation
+```{r}
+clusters3<- bank_clusters_3$betweenss/bank_clusters_3$totss
+clusters4<- bank_clusters_4$betweenss/bank_clusters_4$totss
+clusters5<- bank_clusters_5$betweenss/bank_clusters_5$totss
+
+betweenss.metric <- c(clusters3, clusters4, clusters5)
+print(betweenss.metric) 
+```
+###k=5 has the most separation.
+
+
+###Cluster Cohesion
+```{r}
+clusters3<- bank_clusters_3$tot.withinss/bank_clusters_3$totss
+clusters4<- bank_clusters_4$tot.withinss/bank_clusters_4$totss
+clusters5<- bank_clusters_5$tot.withinss/bank_clusters_5$totss
+
+totwithinss.metric <- c(clusters3, clusters4, clusters5)
+print(totwithinss.metric) 
+```
+###k=5 also has the most cluster cohesion.
+###We will use k = 5
+
+###Put clusters in data frame
+```{r}
+Clusters_5<-data.frame(bank_clusters_5$centers) 
+Clusters_5<-data.frame(t(bank_clusters_5$centers)) 
+```
+
+###Sort the centroids for each cluster
+```{r}
+Clusters_5[order(-Clusters_5$X1), ] 
+Clusters_5[order(-Clusters_5$X2), ]
+Clusters_5[order(-Clusters_5$X3), ]
+Clusters_5[order(-Clusters_5$X4), ]
+Clusters_5[order(-Clusters_5$X5), ]
+```
+###Cluster 1 - Married people over 40 with a positive balance
+###Cluster 2 - People with home loans who can pay for them
+###Cluster 3 - People who have needed longer contact help from the bank
+###Cluster 4 - Grab bag of people
+###Cluster 5 - Older employed folks.
+
+
+###Check if any particular clusters are more likely to subscribe to term deposits
+```{r}
+bank1$cluster <- bank_clusters_5$cluster 
+aggregate(data = bank1, bank1$y..category ~ cluster, mean)
+```
+###Cluster 3 (people who had longer durations of contact with the bank) contain the majority of people who subscribed to a term deposit.
+
+#Recommendations
+###From all 3 types of analysis, we observed that customers who had longer durations of contact (greater than 5-10 minutes) were much more likely to subscribe to a term deposit.  This makes sense, as these customers most likely received more information about their options and were persuaded by bank workers.  We also saw that these individuals were most likely employed, giving them an income that would allow them to make a deposit.  Additionally, these individuals did not have multiple previous marketing campaigns, so they were newer to the marketing process.
+
+###I would recommend that Hometown Bank focus on customers who are employed and have not been contacted more than 3 times before.  However, I would suggest that the biggest change to their marketing process be that they aim to converse with customers for more than 10 minutes about the term deposits.  They could market 1-hour face-to-face meetings or extended phone discussions in order to increase their chances of customers subscribing and increase overall revenue.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
